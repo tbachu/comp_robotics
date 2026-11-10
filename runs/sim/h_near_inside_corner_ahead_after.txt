@@ -1,5 +1,5 @@
 RUN LOG: work/h_near_inside_corner_ahead_after/runs/run_001
-SETTINGS: MODE RUN FOLLOW_SPEED 150.0 SLOW_SPEED 100.0 ORBIT_SPEED 85.0 ORBIT_RADIUS 215.0 TURN_RATE 75.0 BUMP_TURN 90.0 BUMP_BACKUP 100.0 TARGET_POINT_CLEARANCE 200.0 FRONT_HEADING 35.0 WALL_RUN_MIN 100.0 PAST_TURN 60.0 SEARCH_MARGIN 800.0 MAX_X_FIX 1000.0 RETURN_RESERVE 15000 RUN_LIMIT 117000
+SETTINGS: MODE RUN FOLLOW_SPEED 150.0 SLOW_SPEED 100.0 ORBIT_SPEED 85.0 ORBIT_RADIUS 215.0 TURN_RATE 75.0 BUMP_TURN 90.0 BUMP_BACKUP 100.0 TARGET_POINT_CLEARANCE 200.0 FRONT_HEADING 25.0 PANEL_SPAN 200.0 WALL_RUN_MIN 100.0 PAST_TURN 60.0 SEARCH_MARGIN 800.0 MAX_X_FIX 1000.0 RETURN_RESERVE 15000 RUN_LIMIT 117000
 Keep robot still. Checking gyro...
 Gyro moved 0 deg in 2 s
 Ready. Press CENTER. DOWN aborts.
@@ -11,7 +11,8 @@ TURN RIGHT
 FOLLOW: time_ms,followed,sonar,filtered_out,x,y,yaw,encoder_yaw
 10390 0 108.0  2005 898 89 88
 BUMP 1 : backing up and turning right
-Front wall ends in an inside corner at X 2150
+Starting panel heading 90 deg, measured over 69 mm
+Starting panel ends in an inside corner 150 mm past the hit point
 14750 -69 119.0  1936 896 178 177
 15290 0 469.0 * 1940 827 177 177
 15830 50 467.0 * 1944 777 169 169
@@ -90,13 +91,13 @@ BUMP 2 : backing up and turning right
 58290 4120 None  1563 1007 -201 -201
 58830 4166 None  1585 966 -215 -215
 59370 4211 None  1616 932 -227 -227
-Back on the front wall: 1740 854
 59910 4258 146.0  1653 904 -238 -238
 60450 4315 159.0  1703 877 -245 -245
+Back on the starting panel: 1808 836
 60990 4369 164.0  1753 858 -254 -254
 61530 4423 166.0  1807 848 -264 -263
 62070 4477 163.0  1861 846 -273 -272
-Hit point by odometry; following to the wall end
+Hit point by odometry; following to the panel's end
 62610 4531 154.0  1914 853 -280 -280
 63150 4591 140.0  1972 867 -286 -286
 63690 4672 116.0  2050 891 -288 -287
@@ -106,9 +107,8 @@ Hit point by odometry; following to the wall end
 65850 4948 81.0  2320 933 -265 -264
 66390 5029 94.0  2400 922 -261 -260
 BUMP 3 : backing up and turning right
-Front wall ended (inside corner): X off by -373 mm
-Y off by -3 mm (last front-wall echo)
+Front wall ended (inside corner): off by -373 mm along the wall and -5 mm across it
 RETURN
 Home: axle to 2006 394 reversing
 Done at 76380 ms
-RESULT: done at 76380 ms | Front wall ended (inside corner): X off by -373 mm | X fix -373 | measuring point estimate 1998 499, axle 2006 393, heading -1 | start 2000 500 axle 2006 394 heading 0
+RESULT: done at 76380 ms | Front wall ended (inside corner): off by -373 mm along the wall and -5 mm across it | X fix -373 | measuring point estimate 1998 499, axle 2006 393, heading -1 | start 2000 500 axle 2006 394 heading 0

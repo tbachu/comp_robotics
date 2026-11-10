@@ -1,5 +1,5 @@
 RUN LOG: work/z2_staircase_back_after/runs/run_001
-SETTINGS: MODE RUN FOLLOW_SPEED 150.0 SLOW_SPEED 100.0 ORBIT_SPEED 85.0 ORBIT_RADIUS 215.0 TURN_RATE 75.0 BUMP_TURN 90.0 BUMP_BACKUP 100.0 TARGET_POINT_CLEARANCE 200.0 FRONT_HEADING 35.0 WALL_RUN_MIN 100.0 PAST_TURN 60.0 SEARCH_MARGIN 800.0 MAX_X_FIX 1000.0 RETURN_RESERVE 15000 RUN_LIMIT 117000
+SETTINGS: MODE RUN FOLLOW_SPEED 150.0 SLOW_SPEED 100.0 ORBIT_SPEED 85.0 ORBIT_RADIUS 215.0 TURN_RATE 75.0 BUMP_TURN 90.0 BUMP_BACKUP 100.0 TARGET_POINT_CLEARANCE 200.0 FRONT_HEADING 25.0 PANEL_SPAN 200.0 WALL_RUN_MIN 100.0 PAST_TURN 60.0 SEARCH_MARGIN 800.0 MAX_X_FIX 1000.0 RETURN_RESERVE 15000 RUN_LIMIT 117000
 Keep robot still. Checking gyro...
 Gyro moved 0 deg in 2 s
 Ready. Press CENTER. DOWN aborts.
@@ -14,9 +14,10 @@ FOLLOW: time_ms,followed,sonar,filtered_out,x,y,yaw,encoder_yaw
 11470 156 108.0  2162 899 90 90
 12010 236 110.0  2242 897 91 91
 12550 305 None  2311 896 91 91
-Front wall ends in an outside corner at X 2435
+Starting panel heading 89 deg, measured over 310 mm
 13090 354 None  2360 898 81 80
 13630 400 None  2404 911 66 66
+Starting panel ends in an outside corner 435 mm past the hit point
 14170 446 None  2443 934 53 52
 14710 492 None  2476 966 40 39
 15250 547 151.0  2507 1012 30 30
@@ -102,8 +103,8 @@ BUMP 1 : backing up and turning right
 62680 4418 None  1383 1019 -216 -216
 63220 4464 None  1413 984 -226 -225
 63760 4509 None  1448 955 -234 -234
-Back on the front wall: 1580 890
 64300 4556 156.0  1488 930 -243 -243
+Back on the starting panel: 1604 885
 64840 4610 160.0  1538 910 -251 -250
 65380 4664 164.0  1590 896 -260 -259
 65920 4718 163.0  1644 891 -269 -269
@@ -111,7 +112,7 @@ Back on the front wall: 1580 890
 67000 4826 165.0  1752 889 -269 -268
 67540 4880 166.0  1806 888 -269 -269
 68080 4934 167.0  1860 887 -269 -268
-Hit point by odometry; following to the wall end
+Hit point by odometry; following to the panel's end
 68620 4988 168.0  1914 886 -269 -269
 69160 5042 169.0  1968 885 -269 -269
 69700 5096 170.0  2022 884 -269 -268
@@ -124,9 +125,11 @@ Hit point by odometry; following to the wall end
 73480 5474 178.0  2400 877 -268 -268
 74020 5528 178.0  2454 876 -269 -268
 74560 5582 None  2508 875 -269 -268
-Front wall ended (outside corner): X off by -220 mm
-Y off by -49 mm (last front-wall echo)
+75100 5634 None  2560 875 -276 -275
+75640 5682 None  2605 889 -298 -298
+Front wall ended (outside corner): off by -221 mm along the wall and 52 mm across it
 RETURN
+Home: via 2435 900
 Home: axle to 2006 394 reversing
-Done at 82950 ms
-RESULT: done at 82950 ms | Front wall ended (outside corner): X off by -220 mm | X fix -220 | measuring point estimate 2001 499, axle 2005 393, heading 1 | start 2000 500 axle 2006 394 heading 0
+Done at 85940 ms
+RESULT: done at 85940 ms | Front wall ended (outside corner): off by -221 mm along the wall and 52 mm across it | X fix -221 | measuring point estimate 2001 500, axle 2005 394, heading 1 | start 2000 500 axle 2006 394 heading 0

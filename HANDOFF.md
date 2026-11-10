@@ -4,7 +4,7 @@ Nov 9, 2026 · Tanish Bachu · Live version with diagram: https://claude.ai/arti
 
 ## Status
 
-The robot completes the lab and returns within 5–15 cm of the start when the front wall has an outside corner just past the hit point. From some start spots it used to keep going past the start and round more corners. `main.py` now fixes that and also uses inside corners as a landmark. A second round of fixes (below) puts the whole robot back in its start pose instead of just the measuring point, and keeps it close to the wall on zigzags. All of it has been checked in a desk simulation but not yet on the robot.
+The robot completes the lab and returns within 5–15 cm of the start when the front wall has an outside corner just past the hit point. From some start spots it used to keep going past the start and round more corners. `main.py` now fixes that and also uses inside corners as a landmark. A second round of fixes (below) puts the whole robot back in its start pose instead of just the measuring point, and keeps it close to the wall on zigzags. A third round handles a starting panel that is slanted, as on a zigzag obstacle, where one run ended a panel early. All of it has been checked in a desk simulation but not yet on the robot.
 
 - **Code that runs on the robot:** `main.py`. It's the newest version. It has the lap-end fix and run logs (commit `3ebdbfa`), plus the start-pose return, the wall-following fix for zigzags and the heading fix (Nov 9, late). Not yet tested on the robot (see Known issues). The version before the fix is in git, commit `88203d2`.
 - **Last version tested and known to work:** `main_working_v3.py`.
@@ -35,13 +35,17 @@ The robot traces the obstacle by sonar, then trusts the front wall's end, not it
 
 1. **Drive to the wall.** Straight ahead until the touch sensor hits, then beep.
 2. **Back up and turn right.** Back 94 mm, then turn 90° right, so the wall is on the left.
-3. **Follow the wall.** The sonar keeps the measuring point about 20 cm out. On a bump it backs up and turns 90° right. On the first pass it records where the front wall ends (the landmark): either where the sonar loses it (outside corner) or where the touch sensor hits the next wall (inside corner).
-4. **Back on the front wall.** Once the heading is back within 35° of east after a full lap, the robot knows it is on the front wall's final pass (log: `Back on the front wall`). This uses the gyro, not the X estimate, because X drifts 0.3–0.8 m a lap.
-5. **Wall end reached** (it is past the start):
-   - The sonar loses the wall after at least 10 cm of following, or the robot bumps the next wall. Fix X from the matching landmark, then return.
-   - Turned more than 60° past east (rounding the far end). Fix X if the circle began at the wall end; otherwise return using the estimate.
-6. **Estimate fallbacks.** These only apply once the robot is heading south-east or later and is south of the front wall:
-   - **No landmark recorded:** return as soon as the estimate reaches the hit point's X.
+3. **Follow the wall.** The sonar keeps the measuring point about 20 cm out. On a bump it backs up and turns 90° right.
+   - **The starting panel.** The panel the robot hit need not run east. Its direction is measured from the contact point to the sonar's points on it (log: `Starting panel heading N deg, measured over M mm`).
+   - **The landmark.** On the first pass the robot records where that panel's side of the obstacle ends: an outside corner (the sonar loses the wall) or an inside corner (the touch sensor hits the next wall).
+   - **Real corners only.** An outside corner counts only if the robot circled 30°+ before picking a wall up, or turned 60°+ in all. Zigzag bends turn less, and whether the sonar drops out at one depends on the approach.
+4. **Back on the starting panel.** After a full lap, once the heading is within 25° of the panel's measured heading, the robot knows it is on the panel's final pass (log: `Back on the starting panel`). This uses the gyro, not the position estimate, which drifts 0.3–0.8 m a lap. The old check, within 35° of east, also matched the panel before a slanted starting panel, so a lap ended one panel early.
+5. **Panel end reached** (it is past the start):
+   - The same kind of corner as on the first pass. Fix the position, then return. The end fixes it along that wall; the sonar range fixes it across the wall. If the robot was already round onto the next wall, it backs out to the corner's outside first so the way home does not clip the corner.
+   - Turned more than 60° past the panel's heading with no match: return using the estimate.
+   - A bump before the expected end (a notch in a zigzag face) no longer ends the lap.
+6. **Estimate fallbacks.** These only apply once the robot is round the last corner before the panel and on its side of the panel's line:
+   - **No landmark recorded:** return as soon as the estimate reaches the hit point, but only while heading along the starting panel.
    - **Landmark recorded:** keep following until the wall end, giving up 80 cm past the expected end.
    - **Past the 105 s mark:** return straight away.
 7. **Return to start.** Put the robot back in the pose it started in: its axle where the axle started, then turn in place to face the obstacle again (log: `Home: ...`). It usually backs in, which needs about 90° of turning in all instead of about 270°. The old return only brought the measuring point (the touch-rod tip) to (2.0 m, 0.5 m). The robot arrives facing roughly the opposite way it started, so its body ended 15–25 cm short, back along the way it came. Depending on which part of the robot you measured, that looked like 5–20 cm.
@@ -93,10 +97,12 @@ These are the constants worth changing, with their values in `main.py` and what 
 | `BUMP_TURN` | 90° | Bumps the same corner twice: raise it. Wanders away from the wall after a glancing bump: try 75. |
 | `BUMP_BACKUP` / `BUMP_SPEED` | 100 mm at 150 mm/s | Scrapes the wall while turning after a bump: back up further. |
 | `TARGET_POINT_CLEARANCE` | 200 mm | Measuring point needs more margin under the 30 cm rule: try 160 (expect more bumps). |
-| `RETURN_RESERVE` | 15,000 ms | The return gets cut off by the run limit, or the log says `No time to turn to the start heading`: raise it. |
+| `RETURN_RESERVE` | 15,000 ms | The minimum kept for the return. Far from the start the code keeps more (1.5 × distance ÷ `RETURN_SPEED` + 6 s). The return gets cut off by the run limit, or the log says `No time to turn to the start heading`: raise it. |
 | `FENCE_RATE` | 10 mm/s | Still drives straight away from a wall after a corner: lower it to 6–8. Turns its nose into walls: raise it. |
 | `RUN_LIMIT` | 117,000 ms | Leave as is: it leaves 3 s of margin under the 120 s task limit. |
-| `FRONT_HEADING` | 35° | Landmark fires on the wrong wall: lower it. Never prints `Back on the front wall`: raise it. |
+| `FRONT_HEADING` | 25° | Landmark fires on the wrong wall (for example the panel before the starting one): lower it. Never prints `Back on the starting panel`: raise it. |
+| `CORNER_CONFIRM` / `CORNER_TURN` | 30° / 60° | The log never says `Starting panel ends in an outside corner` at a real corner: lower them. A zigzag bend is taken as the landmark: raise them. |
+| `PANEL_SPAN` / `PANEL_BEND` | 200 mm / 10° | Heading and position corrections on a slanted starting panel make the return worse: raise `PANEL_SPAN`. |
 | `WALL_RUN_MIN` | 100 mm | Landmark fires while rounding the front wall's west corner: raise it. |
 | `PAST_TURN` | 60° | `Turned past the front wall's end` while still on the front wall: raise it to 70–75. |
 | `SEARCH_MARGIN` | 800 mm | Gives up just before the real wall end: raise it. |
@@ -112,7 +118,11 @@ The first job is to test `main.py` on the robot from the start spots where it ke
 - [ ] Obstacle shapes whose outline turns more than 60° past a full lap before the front wall (for example an L whose leg sticks out south, west of the hit point) will stop early and return using the estimate.
 - [ ] Zigzag walls (fixed, needs a robot test). After a corner the sonar often picks the next wall up while the robot is still turning. The ±25° heading fence (`APPROACH_ANGLE`) then stayed anchored to that heading until the robot was back in its distance band. So it could not turn parallel, and drove straight away from the wall, out to 300–400 mm. That is how one run skipped a zigzag. Now, when the range is steadily changing, the fence re-aims at the wall's direction, worked out from how fast the range changes (sin θ = rate ÷ speed). In the simulation this took a plain box from 2 bumps to 0, kept the measuring point within about 27 cm on most shapes (was 35–42 cm), and made laps 10–20 s shorter. A stuck oblique echo, which the fence exists to block, has no rate, so it is still blocked. Check the 30 cm rule on the real zigzag.
 - [ ] Very deep, sharp zigzags (teeth over about 20 cm deep) still take the measuring point past 30 cm for some seconds. If the front wall runs straight into one, there is no clean wall end to use as a landmark either.
-- [ ] Landmark accuracy depends on reaching the wall's end the same way on both passes. If the robot is still closing in (about 20 cm out and angled in) when the sonar loses the corner, the X fix can be 5–12 cm off. Correcting this needs the real sonar's beam width.
+- [ ] Landmark accuracy depends on reaching the wall's end the same way on both passes. If the robot is still closing in (about 20 cm out and angled in) when the sonar loses the corner, the fix can be 5–12 cm off. Correcting this needs the real sonar's beam width.
+- [ ] Slanted starting panel (fixed, needs a robot test). A run ended a panel early and backed straight away from that panel. The code assumed the starting panel runs east, so the panel before a slanted one also looked like the starting panel. Its end (or a bump in a notch) then ended the lap, and the heading reset bent the heading by the slant. The simulation's slanted-zigzag runs (`s1`–`s5` in `runs/sim/`) went from 37–96 cm off to 0–6 cm in most cases. Some still miss by about 50 cm, depending on the sonar model.
+- [ ] Where the starting panel's side of the obstacle ends in a shallow corner (about 40°, like a zigzag bend), no landmark is recorded and the return uses the estimate. Nothing on one pass tells such a corner from a zigzag bend.
+- [ ] Time: on a slanted zigzag front the lap now runs on to the real corner past the start and comes back via that corner. Those simulated runs took 89–109 s (box shapes 57–86 s), with returns of 13–14 s. Watch the finish time on the robot.
+- [ ] If a run still goes wrong, copy its log off the brick (`./fetch_runs.sh`). The lines starting `Starting panel`, `Back on the starting panel` and `Front wall ended` show which rule fired where.
 - [ ] Time is tight on laps with 5–6 bumps. Each bump costs about 4 s, about 1 s of it the ouch pause.
 - [ ] The Points section of the assignment hasn't been read yet. It decides whether accuracy at the start or staying under 2 minutes matters more.
 
@@ -131,9 +141,9 @@ While following, the log prints a row every 500 ms: `time_ms, followed, sonar, f
 
 | Last line before `RETURN` | Meaning | Expected accuracy |
 | --- | --- | --- |
-| `Front wall ended (outside corner): X off by N mm` | The sonar landmark fired; X was fixed from the front wall's end | 5–20 cm |
-| `Front wall ended (inside corner): X off by N mm` | The bump landmark fired; X was fixed from the inside corner | 5–20 cm (new; desk-tested only) |
-| `... X off by N mm is too far; stopping by odometry` | A landmark matched, but the fix was over 1 m, so it was ignored | 20–50 cm |
+| `Front wall ended (outside corner): off by N mm along the wall and M mm across it` | The corner landmark fired; position fixed from the panel side's end | 5–20 cm |
+| `Front wall ended (inside corner): off by N mm along the wall and M mm across it` | The bump landmark fired; position fixed from the inside corner | 5–20 cm (desk-tested only) |
+| `... off by N mm along the wall is too far; stopping by odometry` | A landmark matched, but the fix was over 1 m, so it was ignored | 20–50 cm |
 | `Back at hit point: ...` | No landmark from this start point; stopped using the estimate | 20–50 cm |
 | `Turned past the front wall's end; stopping by odometry` | Rounded the far end with no landmark match | 20–50 cm |
 | `Wall end not found; stopping by odometry` | Went 80 cm past the expected wall end | 20–50 cm |

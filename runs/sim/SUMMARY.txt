@@ -1,37 +1,68 @@
-Desk simulation: before = main.py as committed in 3ebdbfa (what ran on the robot), after = current main.py.
-2D model: sonar beam +/-10 deg, echoes lost past 25 deg incidence; encoder slip on the back face makes X lag or lead.
-body = true distance of the robot's axle from where it started (what you see looking at the robot).
-tip  = true distance of the measuring point (touch-rod tip) from (2000, 500).
-max wall = worst true measuring-point distance from the obstacle while following; >30cm = seconds past the 30 cm rule.
+Desk simulation: before = main.py as committed in 356d010 (ran on the robot), after = current main.py.
+2D model (default): sonar beam +/-10 deg, echoes lost past 25 deg incidence; encoder slip on the back face
+makes the position estimate lag or lead, like the 300-780 mm seen on the robot.
+body = true distance of the robot's axle from where it started.  max wall = worst true measuring-point
+distance from the obstacle while following.  >30cm = seconds past the 30 cm rule.
 Files: <scenario>_<before|after>.txt (console), .csv (run log as saved on the brick), _truth.csv (true path);
-paths_before.png / paths_after.png = true paths on the plain box and the three zigzag shapes.
+paths_slanted_before.png / paths_slanted_after.png = true paths on slanted zigzag fronts.
 
-Scenarios: a short front wall, X lags | b inside corner 300 mm east, X lags | c X ahead, hit near west end |
-d plain box | f long wall, X lags | g 250 mm front wall | h inside corner 150 mm east, X ahead |
-z1 sawtooth east face (150 mm teeth) | z2 staircase back face (150 mm steps) | z3 deep sawtooth (250 mm teeth), X lags
+Scenarios: a short front wall | b inside corner 300 mm east | c estimate ahead, hit near west end | d plain box |
+f long wall | g 250 mm front wall | h inside corner 150 mm east | z1 sawtooth east face | z2 staircase back face |
+z3 deep sawtooth | s1-s5 the front is a zigzag of 300 mm panels sloped +/-20 deg and the robot hits a slanted one
+(s1/s2 sloping down to the east, s3/s4 rising, s5 next to a notch).  'lag' = the estimate drifts ~450-800 mm.
 
 == before
-scenario                     body   tip max wall  >30cm bumps task s  how the lap ended
-a_short_wall_lag              179    22      377    6.2     2   74.2  Front wall ended (outside corner): X off by 517 mm
-b_inside_corner_lag           220    25      409   15.4     4   99.9  Front wall ended (inside corner): X off by 881 mm
-c_ahead_west_end              146    31      366   12.2     2   73.2  Front wall ended (outside corner): X off by -339 mm
-d_baseline                    194    10      395   12.2     2   76.5  Front wall ended (outside corner): X off by 2 mm
-f_long_wall_lag               204    33      353    5.9     2   81.7  Front wall ended (outside corner): X off by 603 mm
-g_tiny_wall_lag               153    56      368    4.8     1   60.6  Front wall ended (outside corner): X off by 478 mm
-h_near_inside_corner_ahead    251    44      425    9.9     3   78.0  Front wall ended (inside corner): X off by -344 mm
-z1_sawtooth_east              180    12      396   18.4     4  104.7  Front wall ended (outside corner): X off by 15 mm
-z2_staircase_back             182     9      373    8.2     2   82.8  Front wall ended (outside corner): X off by 12 mm
-z3_deep_sawtooth_lag         1208  1146      307    0.7    19  117.0  STOPPED: 117-second run limit
+scenario                     body max wall  >30cm bumps task s  how the lap ended
+a_short_wall_lag               22      267    0.0     0   58.1  Front wall ended (outside corner): X off by 529 mm
+b_inside_corner_lag             4      268    0.0     2   79.4  Front wall ended (inside corner): X off by 876 mm
+c_ahead_west_end               37      323    1.9     1   64.8  Front wall ended (outside corner): X off by -284 mm
+d_baseline                     18      268    0.0     0   60.5  Front wall ended (outside corner): X off by 16 mm
+f_long_wall_lag                18      268    0.0     0   63.1  Front wall ended (outside corner): X off by 595 mm
+g_tiny_wall_lag                52      269    0.0     0   52.1  Front wall ended (outside corner): X off by 349 mm
+h_near_inside_corner_ahead      1      313    2.2     3   76.4  Front wall ended (inside corner): X off by -373 mm
+z1_sawtooth_east               14      271    0.0     2   84.8  Front wall ended (outside corner): X off by 19 mm
+z2_staircase_back              13      306    0.1     1   83.0  Front wall ended (outside corner): X off by -220 mm
+z3_deep_sawtooth_lag          359      363   10.8     4  112.3  Out of time; stopping by odometry
+s1_slant_ese                   52      274    0.0     1   75.7  Back at hit point: 2002 1000 followed 6112 mm
+s2_slant_ese_lag              964      274    0.0     3   93.5  Bumped while looking for the wall end; stopping by odometry
+s3_slant_ene                  645      273    0.0     1   80.5  Front wall ended (outside corner): X off by 125 mm
+s4_slant_ene_lag              646      273    0.0     1   82.5  Front wall ended (outside corner): X off by 667 mm
+s5_slant_near_notch_lag       601      283    0.0     1   81.5  Front wall ended (outside corner): X off by 668 mm
 
 == after
-scenario                     body   tip max wall  >30cm bumps task s  how the lap ended
-a_short_wall_lag               22    25      267    0.0     0   58.1  Front wall ended (outside corner): X off by 529 mm
-b_inside_corner_lag             4     2      268    0.0     2   79.4  Front wall ended (inside corner): X off by 876 mm
-c_ahead_west_end               37    35      323    1.9     1   64.8  Front wall ended (outside corner): X off by -284 mm
-d_baseline                     18    16      268    0.0     0   60.5  Front wall ended (outside corner): X off by 16 mm
-f_long_wall_lag                18    16      268    0.0     0   63.1  Front wall ended (outside corner): X off by 595 mm
-g_tiny_wall_lag                52    55      269    0.0     0   52.1  Front wall ended (outside corner): X off by 349 mm
-h_near_inside_corner_ahead      1     3      313    2.2     3   76.4  Front wall ended (inside corner): X off by -373 mm
-z1_sawtooth_east               14    12      271    0.0     2   84.8  Front wall ended (outside corner): X off by 19 mm
-z2_staircase_back              13    16      306    0.1     1   83.0  Front wall ended (outside corner): X off by -220 mm
-z3_deep_sawtooth_lag          359   357      363   10.8     4  112.3  Out of time; stopping by odometry
+scenario                     body max wall  >30cm bumps task s  how the lap ended
+a_short_wall_lag               22      267    0.0     0   62.8  Front wall ended (outside corner): off by 529 mm along the wall an
+b_inside_corner_lag             3      268    0.0     2   79.4  Front wall ended (inside corner): off by 876 mm along the wall and
+c_ahead_west_end               41      323    1.9     1   70.6  Front wall ended (outside corner): off by -284 mm along the wall a
+d_baseline                     20      268    0.0     0   63.8  Front wall ended (outside corner): off by 16 mm along the wall and
+f_long_wall_lag                20      268    0.0     0   66.5  Front wall ended (outside corner): off by 595 mm along the wall an
+g_tiny_wall_lag                58      269    0.0     0   57.5  Front wall ended (outside corner): off by 349 mm along the wall an
+h_near_inside_corner_ahead      3      313    2.2     3   76.4  Front wall ended (inside corner): off by -373 mm along the wall an
+z1_sawtooth_east                6      271    0.0     2   81.5  Back at hit point: 0 mm along the panel, followed 5906 mm
+z2_staircase_back              13      306    0.3     1   85.9  Front wall ended (outside corner): off by -221 mm along the wall a
+z3_deep_sawtooth_lag          359      363   10.8     4  112.3  Out of time; stopping by odometry
+s1_slant_ese                    4      278    0.0     2   89.1  Turned past the front wall's end; stopping by odometry
+s2_slant_ese_lag                0      284    0.0     3  100.7  Front wall ended (outside corner): off by 614 mm along the wall an
+s3_slant_ene                   28      291    0.0     3  104.8  Front wall ended (outside corner): off by -21 mm along the wall an
+s4_slant_ene_lag                6      284    0.0     3  106.5  Front wall ended (outside corner): off by 595 mm along the wall an
+s5_slant_near_notch_lag       560      283    0.0     3  108.6  Front wall ended (outside corner): off by 380 mm along the wall an
+
+== Same scenarios with three sonar models (body miss mm): before / after
+                              narrow 8/15  medium 10/25    wide 15/40
+a_short_wall_lag                 24 /  25      22 /  22     112 / 659
+b_inside_corner_lag               5 /   4       4 /   3       4 /   4
+c_ahead_west_end                 29 /  29      37 /  41      57 /  62
+d_baseline                       31 /  29      18 /  20      85 /  30
+f_long_wall_lag                  23 /  23      18 /  20     116 / 128
+g_tiny_wall_lag                  33 /  36      52 /  58      44 /  47
+h_near_inside_corner_ahead        2 /   3       1 /   3       6 /   5
+z1_sawtooth_east                 18 / 188      14 /   6       3 /   3
+z2_staircase_back                20 /  21      13 /  13      25 /  25
+z3_deep_sawtooth_lag             26 / 563     359 / 359     570 / 570
+s1_slant_ese                    593 / 110      52 /   4       2 /   3
+s2_slant_ese_lag                530 / 530     964 /   0     537 / 539
+s3_slant_ene                    374 /   1     645 /  28      45 /  45
+s4_slant_ene_lag                368 / 527     646 /   6     552 /   6
+s5_slant_near_notch_lag         532 / 532     601 / 560     550 / 547
+before  median  37 mm, worst  964 mm, 14 of 45 runs more than 15 cm off, 17 more than 6 cm
+after   median  28 mm, worst  659 mm, 11 of 45 runs more than 15 cm off, 14 more than 6 cm
