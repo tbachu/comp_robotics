@@ -36,7 +36,8 @@ All files are in the repo folder (`comp_robotics/`). Only `main.py` runs on the 
 | --- | --- | --- |
 | `main.py` | Everything above | `3ebdbfa` and `356d010` versions yes; `386aac6` not yet |
 | `fetch_runs.sh` | Copies run logs off the brick into `runs/` | — |
-| `runs/sim/` | Simulated runs of `356d010` against `386aac6` on 15 obstacle shapes. Start with `SUMMARY.txt`, then `paths_slanted_after.png` | — |
+| `sim/` | Desk simulator: runs `main.py` unchanged against simulated obstacles. `python3 sim/run.py`; see `sim/README.md` | — |
+| `runs/sim/` | Saved simulated runs of `356d010` against `386aac6` on 15 obstacle shapes. Start with `SUMMARY.txt`, then `paths_slanted_after.png` | — |
 | `main_working_v3.py` | 90° bump turn, faster speeds, wider wall-end search, 12 s return reserve | Yes, 5–15 cm with a clear front-wall corner |
 | `main_working_v2.py` | Same, but turns 60° after a bump | Yes, 10–20 cm |
 | `main_working.py` | First version with the front-wall-end landmark | Yes, 5–10 cm on one run |
@@ -100,14 +101,14 @@ All of this is in `follow()` and `go_home()` in `main.py`. The landmark handling
 | 2 | `main_working.py` + search limit of +30 cm | Gave up 30 cm short of the wall end | none | 114.8 s | 5 | 40–50 cm |
 | 1 | `main_working.py` | Landmark | +637 mm | 110.5 s | 5 | 5–10 cm |
 
-**In the desk simulation** (`runs/sim/`). This is a 2D model of the robot, sonar, touch sensor and wheel slip that runs the real `main.py` unchanged. It covered 15 shapes, including box corners, inside corners, a sawtooth, a staircase and slanted zigzag panels, with three sonar beam models:
+**In the desk simulation** (`sim/`, results saved in `runs/sim/`). This is a 2D model of the robot, sonar, touch sensor and wheel slip that runs the real `main.py` unchanged. It covered 15 shapes, including box corners, inside corners, a sawtooth, a staircase and slanted zigzag panels, with three sonar beam models:
 
 | | Runs ending more than 15 cm off (of 45) | Median distance from start | Worst |
 | --- | --- | --- | --- |
 | `356d010` | 14 | 37 mm | 96 cm |
 | `386aac6` (now) | 11 | 28 mm | 66 cm |
 
-With the middle sonar model, box shapes end 0.3–6 cm from the start, except a very deep sawtooth (36 cm). Four of the five slanted-panel cases end within 0–3 cm; the fifth ends 56 cm off. Which cases fail depends on how wide the sonar beam is, and the real one hasn't been measured. The simulator itself isn't in the repo.
+With the middle sonar model, box shapes end 0.3–6 cm from the start, except a very deep sawtooth (36 cm). Four of the five slanted-panel cases end within 0–3 cm; the fifth ends 56 cm off. Which cases fail depends on how wide the sonar beam is, and the real one hasn't been measured. To rerun: `python3 sim/run.py --rev 356d010 --rev HEAD --sonar narrow` (also `medium`, `wide`).
 
 ## Settings to tune
 
@@ -146,6 +147,7 @@ The constants worth changing, with their values in `main.py`. Change one at a ti
 - [ ] **Deep, sharp zigzags.** Teeth over about 20 cm deep still take the measuring point past 30 cm for a few seconds.
 - [ ] **Landmark accuracy.** If the robot is still closing in on the wall when the sonar loses the corner, the landmark fix can be 5–12 cm off. Correcting that needs the real sonar's beam width. Measuring it in `CHECK` mode would also show which simulation results to trust.
 - [ ] **One shape stops early.** If the obstacle's outline turns more than 60° past a full lap before reaching the starting panel (for example an L with a leg sticking out south, west of the hit point), the lap stops early and returns using the estimate.
+- [ ] **Before each robot test,** run `python3 sim/run.py` with all three sonar models after any change to `main.py`, and compare with the previous commit (`--rev`). It catches logic mistakes in seconds. It can't confirm accuracy: the model leaves out scrapes, gyro error and sensor noise (see `sim/README.md`).
 - [ ] **Merge `jims_side` into `main`** once it works on the robot.
 - [ ] **Read the assignment's Points section.** It decides whether accuracy at the start or staying under 2 minutes matters more.
 

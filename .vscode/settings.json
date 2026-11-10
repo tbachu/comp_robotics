@@ -4,6 +4,6 @@
 	"debug.openDebug": "neverOpen",
 	"python.linting.enabled": false,
 	"python.languageServer": "None",
-	// Run logs fetched from the brick stay on the laptop.
-	"ev3devBrowser.download.exclude": "{**/.*,runs/**,fetch_runs.sh}"
+	// Run logs fetched from the brick and the desk simulator stay on the laptop.
+	"ev3devBrowser.download.exclude": "{**/.*,runs/**,sim/**,fetch_runs.sh}"
 }
