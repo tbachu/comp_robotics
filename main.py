@@ -7,7 +7,12 @@
 from pybricks import ev3brick as brick
 from pybricks.ev3devices import Motor, TouchSensor, GyroSensor, UltrasonicSensor
 from pybricks.parameters import Port, Stop, Direction, Button, SoundFile
-from pybricks.tools import wait, StopWatch, print
+from pybricks.tools import wait, StopWatch, print as console_print
+
+try:
+    import os
+except ImportError:
+    import uos as os
 
 
 # ------------------------ MEASURE / CALIBRATE -------------------------
@@ -78,8 +83,24 @@ BUMP_BRIDGE = 120.0            # mm to hold heading after a bump before circling
 APPROACH_ANGLE = 25.0          # deg; most the heading may swing from the last
                                # heading that was parallel to the wall.
 LOOP_MIN_TRAVEL = 1000.0       # mm followed before the loop may close (perimeter >= 1.5 m).
-LOOP_MIN_TURN = 270.0          # deg of net left turn before the loop may close.
+LOOP_MIN_TURN = 315.0          # deg of net left turn before the loop may close: heading
+                               # south-east or later. 270 let a time-out return start
+                               # beside the west face and clip the obstacle's corner.
 LOOP_Y_WINDOW = 400.0          # mm; how far from the hit point line odometry may be.
+# The final pass along the front wall is recognised by heading, not by X:
+# X drifted 300-780 mm per lap, and waiting for it to reach the hit point
+# let the robot round the wall's far end and keep tracing.
+FRONT_HEADING = 35.0           # deg from a full lap's east that counts as the front
+                               # wall (a lap with 4 bumps ended with the gyro ~25 deg off).
+WALL_RUN_MIN = 100.0           # mm of wall followed since the last corner or bump
+                               # before losing it or bumping counts as the wall's end
+                               # (not a flicker while rounding its west corner).
+PAST_TURN = 60.0               # deg turned left past a full lap: rounding the far end.
+SEARCH_MARGIN = 800.0          # mm past the expected wall end before giving up;
+                               # odometry was once 300+ mm ahead, and +300 gave up
+                               # just short of the real wall end.
+MAX_X_FIX = 1000.0             # mm; worst drift seen was 778 mm, so a bigger X fix
+                               # means the wrong corner matched.
 FRONT_WALL_CORRECTION = True   # Re-zero yaw and Y on the front wall at the end.
 LOG_EVERY = 500                # ms; print telemetry to the wired console.
 
@@ -135,6 +156,86 @@ def brake_motor(motor):
         motor.brake()
 
 
+# ------------------------------ RUN LOGS ------------------------------
+# Each run saves runs/run_NNN.txt (everything printed) and runs/run_NNN.csv
+# (one row per control tick) next to this file, so runs started from the
+# brick's menu are saved too. Get them with fetch_runs.sh on the laptop.
+try:
+    LOG_DIR = (__file__.rsplit("/", 1)[0] + "/runs") if "/" in __file__ else "runs"
+except NameError:
+    LOG_DIR = "runs"
+
+
+class RunLog:
+    def __init__(self):
+        self.text = self.csv = self.name = None
+
+    def open(self):
+        # Number runs, since the brick's clock is not reliable. Logging
+        # problems only turn logging off; they never stop the robot.
+        try:
+            try:
+                os.mkdir(LOG_DIR)
+            except OSError:
+                pass  # Already there.
+            number = 1
+            for name in os.listdir(LOG_DIR):
+                if name.startswith("run_"):
+                    try:
+                        number = max(number, int(name[4:7]) + 1)
+                    except ValueError:
+                        pass
+            self.name = LOG_DIR + "/run_%03d" % number
+            self.text = open(self.name + ".txt", "w")
+            self.csv = open(self.name + ".csv", "w")
+            self.csv.write("t_ms,phase,x,y,yaw,encoder_yaw,px,py,sonar\n")
+        except Exception as error:
+            self.close()
+            console_print("Run log off:", error)
+
+    def line(self, text):
+        if self.text is not None:
+            try:
+                self.text.write(text + "\n")
+                self.text.flush()
+            except Exception:
+                self.text = None
+
+    def row(self, robot):
+        # x, y: axle estimate; px, py: measuring point estimate (mm).
+        if self.csv is None:
+            return
+        try:
+            h = (90.0 - robot.old_yaw) * RAD
+            px = robot.x + POINT_FORWARD * cosine(h) - POINT_LEFT * sine(h)
+            py = robot.y + POINT_FORWARD * sine(h) + POINT_LEFT * cosine(h)
+            sonar = "" if robot.sonar_mm is None else str(int(robot.sonar_mm))
+            self.csv.write("%d,%s,%d,%d,%.1f,%.1f,%d,%d,%s\n" % (
+                robot.clock.time(), robot.phase, int(robot.x), int(robot.y),
+                robot.old_yaw, robot.encoder_yaw, int(px), int(py), sonar))
+            self.csv.flush()
+        except Exception:
+            self.csv = None
+
+    def close(self):
+        for f in (self.text, self.csv):
+            try:
+                if f is not None:
+                    f.close()
+            except Exception:
+                pass
+        self.text = self.csv = None
+
+
+LOG = RunLog()
+
+
+def print(*args):
+    # Console and the run's .txt file get the same lines.
+    console_print(*args)
+    LOG.line(" ".join([str(a) for a in args]))
+
+
 class Robot:
     def __init__(self):
         self.left = Motor(Port.B, LEFT_DIRECTION)
@@ -146,6 +247,10 @@ class Robot:
         self.yaw_offset = 0.0  # deg, from front-wall correction
         self.clock = StopWatch()
         self.running = False
+        self.phase = "START"   # for the run log
+        self.sonar_mm = None   # last sonar reading, for the run log
+        self.lap_end = "lap not finished"
+        self.x_fix = None      # mm added to X at the front wall's end, if any
         self.stop()
         self.reset_pose()
 
@@ -210,6 +315,7 @@ class Robot:
 
     def tick(self):
         self.update()
+        LOG.row(self)
         self.guard()
         # Every second, compare gyro and encoder rotation: a stuck gyro
         # makes the controllers spin the robot with no sign of turning.
@@ -225,9 +331,42 @@ class Robot:
     def range_mm(self):
         value = self.sonar.distance()
         # Reject no-echo codes (often 2550 mm) and implausible close echoes.
+        self.sonar_mm = None
         if 30 <= value <= 600:
-            return float(value) - SONAR_OFFSET
-        return None
+            self.sonar_mm = float(value) - SONAR_OFFSET
+        return self.sonar_mm
+
+    def set_phase(self, phase):
+        self.phase, self.sonar_mm = phase, None
+
+    def finish(self, *message):
+        # End the lap: stop, say why, and keep it for the RESULT line.
+        self.stop()
+        print(*message)
+        self.lap_end = " ".join([str(m) for m in message])
+
+    def fix_x(self, offset, label):
+        # The front wall's far end has the same X on both passes, so it
+        # resets the X drift. A fix bigger than any lap has drifted means
+        # the wrong corner matched: keep odometry instead.
+        if abs(offset) <= MAX_X_FIX:
+            self.x += offset
+            self.x_fix = offset
+            self.finish(label, "X off by", int(offset), "mm")
+        else:
+            self.finish(label, "X off by", int(offset),
+                        "mm is too far; stopping by odometry")
+
+    def result(self, outcome):
+        try:
+            px, py = self.body_point(POINT_FORWARD, POINT_LEFT)
+            where = "%d %d" % (int(px), int(py))
+        except Exception:
+            where = "unknown"
+        print("RESULT:", outcome, "at", self.clock.time(), "ms |", self.lap_end,
+              "| X fix", "none" if self.x_fix is None else int(self.x_fix),
+              "| measuring point estimate", where,
+              "| start", int(START_X), int(START_Y))
 
     def body_point(self, forward, left):
         h = (90.0 - self.yaw()) * RAD
@@ -407,14 +546,17 @@ class Robot:
         bridge = 0.0        # mm to bridge this dropout (0 unless following was steady)
         seen = 0            # consecutive echoes while circling
         orbit_yaw = None    # yaw when circling a corner began
+        orbit_px = 0.0      # measuring-point X when circling began
         parallel_yaw = self.yaw()  # heading last seen parallel to the wall
         bumped = False      # no echo yet since the last bump
         east_px = None      # measuring-point X where the front wall ended, first pass
-        on_front = False    # steadily followed the front wall after a full lap
+        east_kind = None    # how it ended: "corner" (sonar lost it) or "bump" (inside corner)
+        on_front = False    # back on the front wall's line heading east after a lap
+        final_pass = False  # round the west corner after a lap, south of the front wall
         close_travel = None  # travel when odometry said "hit point" on the front wall
+        wall_from = self.travel  # travel when the wall was last picked up
         corner = self.body_point(SONAR_FORWARD, SONAR_LEFT + target)
         origin = self.travel
-        last_px = self.body_point(POINT_FORWARD, POINT_LEFT)[0]
         last_time = self.clock.time()
         last_log = last_time - LOG_EVERY
         bumps = 0
@@ -446,6 +588,7 @@ class Robot:
                     filtered = raw  # fresh start, or wall reacquired after circling
                     derivative = 0.0
                     parallel_yaw = self.yaw()  # best guess until the range settles
+                    wall_from = self.travel
                 old = filtered
                 filtered += 0.40 * (raw - filtered)
                 derivative += 0.25 * ((filtered - old) / dt - derivative)
@@ -468,76 +611,98 @@ class Robot:
                 derivative = 0.0
 
             px, py = self.body_point(POINT_FORWARD, POINT_LEFT)
+            yaw = self.yaw()
+            front_heading = abs(yaw - final_yaw) < FRONT_HEADING
             # Back on the front wall: it runs exactly along +X at wall_y, so
             # steady following there re-zeroes accumulated yaw and Y error.
-            # 35 deg: a lap with 4 bumps ended with the gyro ~25 deg off, so a
-            # 20 deg window never recognised the front wall. The Y window keeps
-            # the wider heading window from matching other shallow walls.
-            steady_front = (raw is not None and valid_count >= 5
-                            and abs(self.yaw() - final_yaw) < 35
+            # The Y window keeps the wide heading window from matching other
+            # shallow walls. No X or tight Y window: laps with bumps drifted
+            # 500-700 mm in X and 260 mm in Y.
+            steady_front = (raw is not None and valid_count >= 5 and front_heading
                             and abs(filtered - target) < 25 and abs(derivative) < 20
                             and abs(py - hit_y) < LOOP_Y_WINDOW)
-            if steady_front:
-                on_front = True  # Final pass along the front wall has begun.
-            # No X or tight Y window here: laps with bumps drifted 500-700 mm
-            # in X and 260 mm in Y, which 800/150 mm limits never corrected.
             if FRONT_WALL_CORRECTION and steady_front:
-                self.correct_yaw(0.1 * (final_yaw - self.yaw()))
+                self.correct_yaw(0.1 * (final_yaw - yaw))
                 if abs(wall_y - corner[1]) < LOOP_Y_WINDOW:
                     self.y += 0.2 * (wall_y - corner[1])
                 px, py = self.body_point(POINT_FORWARD, POINT_LEFT)
+                yaw = self.yaw()
 
-            # Loop closes when the measuring point crosses the hit point's X
-            # heading east again, after a full lap of net left turning.
-            # Any eastward crossing south of the front wall counts: a wide arc
-            # round the last corner once crossed 425 mm south of the hit point,
-            # missed a 400 mm window and started a second lap.
-            if (self.travel - origin >= LOOP_MIN_TRAVEL
-                    and self.yaw() - EAST <= -LOOP_MIN_TURN
-                    and py < wall_y
-                    and last_px < hit_x <= px):
-                # Not yet settled on the front wall (e.g. still circling its
-                # west corner) is fine: on_front can still come before the end.
-                if east_px is None or self.clock.time() > RUN_LIMIT - RETURN_RESERVE:
-                    self.stop()
-                    print("Back at hit point:", int(px), int(py),
-                          "followed", int(self.travel - origin), "mm")
-                    return
-                # Odometry X has lagged 500-740 mm in every lap with bumps, so
-                # this "hit point" is often the wall's end. Keep following to
-                # the wall end, where X is known, and return from there.
-                if close_travel is None:
+            # ---- End of the lap ----
+            # The final pass is recognised by heading, which the gyro keeps
+            # within ~5-25 deg, not by X, which drifts 300-780 mm a lap. Once
+            # back on the front wall, losing it, bumping, or turning on past
+            # east all mean the robot has reached the wall's far end, which
+            # is past the start: stop there rather than keep tracing.
+            if (not on_front and raw is not None and front_heading
+                    and abs(py - hit_y) < LOOP_Y_WINDOW):
+                on_front = True
+                print("Back on the front wall:", int(px), int(py))
+            # Followed a real stretch of it, not a flicker at its west corner.
+            along_front = (on_front and front_heading
+                           and self.travel - wall_from >= WALL_RUN_MIN)
+            if (not final_pass and self.travel - origin >= LOOP_MIN_TRAVEL
+                    and yaw - EAST <= -LOOP_MIN_TURN and py < wall_y):
+                final_pass = True  # Round the west corner: a clear line to the start.
+            if final_pass:
+                late = self.clock.time() > RUN_LIMIT - RETURN_RESERVE
+                # "At or past" the hit point, not "crossing" it: when odometry
+                # ran ahead, X was already past it when the lap turn finished.
+                if close_travel is None and px >= hit_x:
+                    if east_px is None or late:
+                        self.finish("Back at hit point:", int(px), int(py),
+                                    "followed", int(self.travel - origin), "mm")
+                        return
+                    # X usually lags, so this is often not yet the hit point.
+                    # Follow on to the wall end, where X is known.
                     close_travel = self.travel
                     print("Hit point by odometry; following to the wall end")
-            last_px = px
-            # Wall end never came, or no time left to look: trust odometry
-            # rather than lap again or hit the run limit before returning.
-            if close_travel is not None and (
-                    # +800: odometry was once 300+ mm AHEAD, and +300 gave up
-                    # just short of the real wall end.
-                    self.travel - close_travel > east_px - hit_x + 800
-                    or self.clock.time() > RUN_LIMIT - RETURN_RESERVE
-                    # Turning well off east: rounding some other corner, not
-                    # running along the front wall.
-                    or abs(self.yaw() - final_yaw) > 60):
-                self.stop()
-                print("Wall end not found; stopping by odometry")
+                if late:
+                    self.finish("Out of time; stopping by odometry")
+                    return
+                if (close_travel is not None
+                        and self.travel - close_travel > east_px - hit_x + SEARCH_MARGIN):
+                    self.finish("Wall end not found; stopping by odometry")
+                    return
+            # Turned well past a full lap: rounding the front wall's far end.
+            # One-sided, so circling its west corner (yaw above final) is fine.
+            if (on_front or close_travel is not None) and yaw < final_yaw - PAST_TURN:
+                if (orbit_yaw is not None and east_kind == "corner"
+                        and abs(orbit_yaw - final_yaw) < FRONT_HEADING):
+                    # This circle began heading east along the front wall,
+                    # so it began at the wall end seen on the first pass.
+                    self.fix_x(east_px - orbit_px, "Front wall ended (outside corner):")
+                else:
+                    self.finish("Turned past the front wall's end; stopping by odometry")
                 return
 
             if self.touch.pressed():
                 # Concave corner: back off, turn right, then resume following.
                 bumps += 1
                 print("BUMP", bumps, ": backing up and turning right")
+                bump_px, bump_yaw = px, yaw  # where the touch tip met the wall
                 self.stop()
+                self.set_phase("BUMP")
                 brick.sound.file(SoundFile.OUCH)  # Blocks ~1 s; robot is stopped.
                 self.straight(-BUMP_BACKUP, BUMP_SPEED)
                 if self.touch.pressed():
                     self.straight(-BUMP_BACKUP, BUMP_SPEED)
-                if close_travel is not None:
-                    # Past the hit point a bump means this is not the front
-                    # wall (a short one once led into a spike, and the bump
-                    # turn aimed at the workspace edge). Return from here.
-                    print("Bumped while looking for the wall end; stopping by odometry")
+                if (east_px is None and bumps == 1 and abs(bump_yaw - EAST) < 30
+                        and abs(py - hit_y) < 150):
+                    # First pass: the front wall ends in an inside corner. The
+                    # touch tip meets it at the same X on the final pass.
+                    east_px, east_kind = bump_px, "bump"
+                    print("Front wall ends in an inside corner at X", int(bump_px))
+                elif along_front or (close_travel is not None
+                                     and bump_yaw < final_yaw + FRONT_HEADING):
+                    # On the front wall after a lap, a bump is its far end:
+                    # past the start. (A short wall once led into a spike, and
+                    # the bump turn aimed at the workspace edge.)
+                    if along_front and east_kind == "bump":
+                        self.fix_x(east_px - bump_px, "Front wall ended (inside corner):")
+                    else:
+                        self.finish("Bumped while looking for the wall end;"
+                                    " stopping by odometry")
                     return
                 self.turn(BUMP_TURN)
                 # The old corner lies on the wall just hit; circling it drove
@@ -547,7 +712,7 @@ class Robot:
                 filtered, derivative, valid_count = None, 0.0, 0
                 gap_travel, orbit_yaw = None, None
                 last_time = self.clock.time()
-                last_px = self.body_point(POINT_FORWARD, POINT_LEFT)[0]
+                self.set_phase("FOLLOW")
                 continue
 
             if raw is None and self.travel - gap_travel < bridge:
@@ -557,23 +722,21 @@ class Robot:
             elif raw is None:
                 # Convex corner: circle the last wall point seen.
                 if orbit_yaw is None:
-                    orbit_yaw, seen = self.yaw(), 0
+                    orbit_yaw, orbit_px, seen = self.yaw(), px, 0
                     # The front wall ends at the same place on both passes.
-                    # Odometry X drifts (no wall corrects it), so if we reach
-                    # that end again the hit point was missed: fix X and stop.
+                    # Odometry X drifts (no wall corrects it), so reaching
+                    # that end again fixes X, and the start is behind us.
                     # Only on the front wall itself (fresh odometry, no bump
                     # yet): from other start points the first eastward corner
                     # can be elsewhere on the obstacle.
                     if (east_px is None and bumps == 0 and abs(self.yaw() - EAST) < 30
                             and abs(py - hit_y) < 150):
-                        east_px = px
-                    # on_front: without it the catch fired at the front wall's
-                    # WEST end, rounding onto the wall for the final pass.
-                    elif east_px is not None and on_front:
-                        self.stop()
-                        print("Front wall ended: passed hit point, X off by",
-                              int(east_px - px), "mm")
-                        self.x += east_px - px
+                        east_px, east_kind = px, "corner"
+                        print("Front wall ends in an outside corner at X", int(px))
+                    # along_front: without a guard like it the catch fired at
+                    # the front wall's WEST end, rounding onto the wall.
+                    elif along_front and east_kind == "corner":
+                        self.fix_x(east_px - px, "Front wall ended (outside corner):")
                         return
                 if self.yaw() - orbit_yaw < -ORBIT_MAX_TURN:
                     raise RuntimeError("Obstacle lost")
@@ -637,6 +800,17 @@ def validate():
 
 def main():
     validate()
+    if MODE != "CHECK":
+        LOG.open()
+        print("RUN LOG:", LOG.name)
+        print("SETTINGS: MODE", MODE, "FOLLOW_SPEED", FOLLOW_SPEED, "SLOW_SPEED", SLOW_SPEED,
+              "ORBIT_SPEED", ORBIT_SPEED, "ORBIT_RADIUS", ORBIT_RADIUS,
+              "TURN_RATE", TURN_RATE, "BUMP_TURN", BUMP_TURN, "BUMP_BACKUP", BUMP_BACKUP,
+              "TARGET_POINT_CLEARANCE", TARGET_POINT_CLEARANCE,
+              "FRONT_HEADING", FRONT_HEADING, "WALL_RUN_MIN", WALL_RUN_MIN,
+              "PAST_TURN", PAST_TURN, "SEARCH_MARGIN", SEARCH_MARGIN,
+              "MAX_X_FIX", MAX_X_FIX, "RETURN_RESERVE", RETURN_RESERVE,
+              "RUN_LIMIT", RUN_LIMIT)
     robot = Robot()
     try:
         if MODE == "CHECK":
@@ -649,35 +823,47 @@ def main():
 
         robot.start()
         if MODE == "STRAIGHT":
+            robot.set_phase("STRAIGHT")
             robot.straight(500.0, 60.0)
         elif MODE == "TURN":
+            robot.set_phase("TURN")
             robot.turn(90.0)
         else:
             if robot.touch.pressed():
                 raise RuntimeError("Front touch already pressed at start")
+            robot.set_phase("APPROACH")
             print("APPROACH")
             robot.straight(APPROACH_LIMIT, APPROACH_SPEED, True, FAST_APPROACH_DISTANCE)
             brick.sound.beep()  # Required: obstacle found (in contact).
             # Contact establishes the front wall's Y coordinate.
             wall_y = robot.body_point(POINT_FORWARD, POINT_LEFT)[1]
+            print("Hit point:", int(robot.body_point(POINT_FORWARD, POINT_LEFT)[0]),
+                  int(wall_y))
+            robot.set_phase("BACKUP")
             print("BACK UP")
             robot.straight(-(INITIAL_AXLE_CLEARANCE - POINT_FORWARD), 50.0)
             if robot.touch.pressed():
                 raise RuntimeError("Front touch stuck after backing up")
+            robot.set_phase("TURN")
             print("TURN RIGHT")
             robot.turn(90.0)
+            robot.set_phase("FOLLOW")
             robot.follow(wall_y)
+            robot.set_phase("RETURN")
             print("RETURN")
             robot.go_to(START_X, START_Y, RETURN_SPEED)
             print("Done at", robot.clock.time(), "ms")
         robot.stop()
         robot.running = False
         brick.sound.beep()  # Only a completed task/test gets the success beep.
+        robot.result("done")
     except Exception as error:
         robot.stop()
         print("STOPPED:", error)
+        robot.result("stopped")
     finally:
         robot.stop()
+        LOG.close()
 
 
 if __name__ == "__main__":
