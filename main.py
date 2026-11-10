@@ -58,8 +58,10 @@ DISTANCE_KD = 0.10             # (deg/s) per (mm/s) of filtered range change.
 HEADING_KP = 2.0               # (deg/s) per degree of heading error.
 PERIOD = 50                    # ms; do not poll sonar in a tight busy loop.
 RUN_LIMIT = 117000             # ms from CENTER press; task limit is 120 s.
-RETURN_RESERVE = 12000         # ms kept for the return (one took 11 s): past this, skip the
-                               # wall-end landmark and head for the start.
+RETURN_RESERVE = 15000         # ms kept for the return: past this, skip the wall-end
+                               # landmark and head for the start. Forward returns took
+                               # 8-11 s; backing into the start pose and turning to face
+                               # +Y adds ~2 s.
 GAP_BRIDGE = 40.0              # mm to hold heading through a sonar dropout
                                # before circling the last wall point seen.
 GAP_JUMP = 60.0                # mm; a sudden outward jump this big means the wall
@@ -82,6 +84,8 @@ BUMP_TURN = 90.0               # deg to turn right after a bump before resuming;
 BUMP_BRIDGE = 120.0            # mm to hold heading after a bump before circling.
 APPROACH_ANGLE = 25.0          # deg; most the heading may swing from the last
                                # heading that was parallel to the wall.
+FENCE_RATE = 10.0              # mm/s; a range changing faster than this re-aims the
+                               # fence at the wall's direction (asin(rate / speed)).
 LOOP_MIN_TRAVEL = 1000.0       # mm followed before the loop may close (perimeter >= 1.5 m).
 LOOP_MIN_TURN = 315.0          # deg of net left turn before the loop may close: heading
                                # south-east or later. 270 let a time-out return start
@@ -146,6 +150,15 @@ def arctan2(y, x):
     if x < 0:
         a = PI - a
     return -a if y < 0 else a
+
+
+def wall_angle(rate, speed):
+    # Degrees the heading is turned clockwise (away) from a wall on the left
+    # whose range changes at `rate` mm/s while driving at `speed` mm/s.
+    if speed < 30.0:
+        return 0.0
+    s = clamp(rate / speed, -0.7, 0.7)
+    return arctan2(s, (1.0 - s * s) ** 0.5) / RAD
 
 
 def brake_motor(motor):
@@ -345,14 +358,19 @@ class Robot:
         print(*message)
         self.lap_end = " ".join([str(m) for m in message])
 
-    def fix_x(self, offset, label):
+    def fix_x(self, offset, label, y_offset=None):
         # The front wall's far end has the same X on both passes, so it
         # resets the X drift. A fix bigger than any lap has drifted means
-        # the wrong corner matched: keep odometry instead.
+        # the wrong corner matched: keep odometry instead. y_offset comes
+        # from the last echo off the front wall: on a short wall the lap can
+        # end before steady following has corrected Y.
         if abs(offset) <= MAX_X_FIX:
             self.x += offset
             self.x_fix = offset
             self.finish(label, "X off by", int(offset), "mm")
+            if y_offset is not None:
+                self.y += y_offset
+                print("Y off by", int(y_offset), "mm (last front-wall echo)")
         else:
             self.finish(label, "X off by", int(offset),
                         "mm is too far; stopping by odometry")
@@ -360,13 +378,15 @@ class Robot:
     def result(self, outcome):
         try:
             px, py = self.body_point(POINT_FORWARD, POINT_LEFT)
-            where = "%d %d" % (int(px), int(py))
+            where = "%d %d, axle %d %d, heading %d" % (
+                int(px), int(py), int(self.x), int(self.y), int(wrap180(self.yaw())))
         except Exception:
             where = "unknown"
         print("RESULT:", outcome, "at", self.clock.time(), "ms |", self.lap_end,
               "| X fix", "none" if self.x_fix is None else int(self.x_fix),
               "| measuring point estimate", where,
-              "| start", int(START_X), int(START_Y))
+              "| start", int(START_X), int(START_Y), "axle",
+              int(START_X + POINT_LEFT), int(START_Y - POINT_FORWARD), "heading 0")
 
     def body_point(self, forward, left):
         h = (90.0 - self.yaw()) * RAD
@@ -497,31 +517,48 @@ class Robot:
         self.stop()
         self.tick()
 
-    def go_to(self, tx, ty, speed):
-        # Face the target, then drive until the measuring point reaches it.
-        # The 6 mm POINT_LEFT offset is ignored when aiming.
-        self.turn(wrap180(self.bearing(tx, ty) - self.yaw()))
+    def go_home(self, speed):
+        # Put the robot back in its start pose: axle where it began, facing
+        # +Y. Steering only the measuring point there left the body 15-25 cm
+        # back along the way it came, because it arrives facing about the
+        # opposite way it started (2 x 106 mm when exactly opposite).
+        hx, hy = START_X + POINT_LEFT, START_Y - POINT_FORWARD  # axle at the start
+        aim, yaw = self.bearing(hx, hy), self.yaw()
+        # Reverse in when that needs less turning in all (the usual case:
+        # the start is behind-right after the lap, ~90 deg instead of ~270).
+        forward_turn = abs(wrap180(aim - yaw)) + abs(wrap180(-aim))
+        reverse_turn = abs(wrap180(aim + 180.0 - yaw)) + abs(wrap180(-aim - 180.0))
+        direction, flip = (-1.0, 180.0) if reverse_turn < forward_turn else (1.0, 0.0)
+        print("Home: axle to", int(hx), int(hy), "reversing" if direction < 0 else "forward")
+        self.turn(wrap180(aim + flip - yaw))
         start = self.clock.time()
         heading = self.yaw()
         while True:
             self.tick()
-            px, py = self.body_point(POINT_FORWARD, POINT_LEFT)
             h = (90.0 - self.yaw()) * RAD
-            remaining = (tx - px) * cosine(h) + (ty - py) * sine(h)
+            # Distance still to go along the direction of travel.
+            remaining = direction * ((hx - self.x) * cosine(h) + (hy - self.y) * sine(h))
             if remaining <= 0:
                 break
             if self.clock.time() - start > 20000:
                 raise RuntimeError("Return motion stalled")
-            if self.touch.pressed():
+            if direction > 0 and self.touch.pressed():
                 raise RuntimeError("Unexpected front contact on return")
             if remaining > 150:
-                heading = self.bearing(tx, ty)  # Freeze aim when close.
+                heading = self.bearing(hx, hy) + flip  # Freeze aim when close.
             command = clamp(remaining * 1.5, 30.0, speed)
-            self.drive(command, clamp(HEADING_KP * wrap180(heading - self.yaw()), -18, 18))
+            self.drive(direction * command,
+                       clamp(HEADING_KP * wrap180(heading - self.yaw()), -18, 18))
             wait(PERIOD)
         self.stop()
         wait(100)
         self.tick()
+        # Face +Y as at the start, unless the run limit would cut the turn off.
+        face = wrap180(-self.yaw())
+        if self.clock.time() + abs(face) / TURN_RATE * 1000.0 + 1000.0 < RUN_LIMIT:
+            self.turn(face)
+        else:
+            print("No time to turn to the start heading")
 
     def orbit_rate(self, corner):
         # Circle `corner` counterclockwise (corner on the left) at ORBIT_RADIUS.
@@ -555,12 +592,15 @@ class Robot:
         final_pass = False  # round the west corner after a lap, south of the front wall
         close_travel = None  # travel when odometry said "hit point" on the front wall
         wall_from = self.travel  # travel when the wall was last picked up
+        front_dy = None     # Y error from the last trusted front-wall echo, final pass
+        front_dy_travel = 0.0
         corner = self.body_point(SONAR_FORWARD, SONAR_LEFT + target)
         origin = self.travel
         last_time = self.clock.time()
         last_log = last_time - LOG_EVERY
         bumps = 0
         self.update()  # Exclude approach, reverse and the initial turn.
+        last_travel = self.travel
         print("FOLLOW: time_ms,followed,sonar,filtered_out,x,y,yaw,encoder_yaw")
 
         while True:
@@ -568,6 +608,8 @@ class Robot:
             now = self.clock.time()
             dt = max(0.001, (now - last_time) / 1000.0)
             last_time = now
+            ground_speed = (self.travel - last_travel) / dt  # mm/s, from encoders
+            last_travel = self.travel
             raw = reading = self.range_mm()
 
             # While circling, far echoes are other parts of the obstacle.
@@ -622,7 +664,10 @@ class Robot:
                             and abs(filtered - target) < 25 and abs(derivative) < 20
                             and abs(py - hit_y) < LOOP_Y_WINDOW)
             if FRONT_WALL_CORRECTION and steady_front:
-                self.correct_yaw(0.1 * (final_yaw - yaw))
+                # "Steady" still allows ~8 deg off parallel (20 mm/s at 150),
+                # which re-zeroing to exactly east baked into the return
+                # (6 deg, ~8 cm over 1 m). Allow for the measured angle.
+                self.correct_yaw(0.1 * (final_yaw + wall_angle(derivative, ground_speed) - yaw))
                 if abs(wall_y - corner[1]) < LOOP_Y_WINDOW:
                     self.y += 0.2 * (wall_y - corner[1])
                 px, py = self.body_point(POINT_FORWARD, POINT_LEFT)
@@ -641,6 +686,15 @@ class Robot:
             # Followed a real stretch of it, not a flicker at its west corner.
             along_front = (on_front and front_heading
                            and self.travel - wall_from >= WALL_RUN_MIN)
+            # Where Y puts the front wall by the latest trusted echo, so the
+            # landmark can fix Y even if steady following never did.
+            if (on_front and front_heading and raw is not None
+                    and raw <= target + CORNER_TRUST):
+                dy = wall_y - self.body_point(SONAR_FORWARD, SONAR_LEFT + raw)[1]
+                if abs(dy) < LOOP_Y_WINDOW:
+                    front_dy, front_dy_travel = dy, self.travel
+            fresh_dy = (front_dy if front_dy is not None
+                        and self.travel - front_dy_travel < 400.0 else None)
             if (not final_pass and self.travel - origin >= LOOP_MIN_TRAVEL
                     and yaw - EAST <= -LOOP_MIN_TURN and py < wall_y):
                 final_pass = True  # Round the west corner: a clear line to the start.
@@ -671,7 +725,8 @@ class Robot:
                         and abs(orbit_yaw - final_yaw) < FRONT_HEADING):
                     # This circle began heading east along the front wall,
                     # so it began at the wall end seen on the first pass.
-                    self.fix_x(east_px - orbit_px, "Front wall ended (outside corner):")
+                    self.fix_x(east_px - orbit_px, "Front wall ended (outside corner):",
+                               fresh_dy)
                 else:
                     self.finish("Turned past the front wall's end; stopping by odometry")
                 return
@@ -699,7 +754,8 @@ class Robot:
                     # past the start. (A short wall once led into a spike, and
                     # the bump turn aimed at the workspace edge.)
                     if along_front and east_kind == "bump":
-                        self.fix_x(east_px - bump_px, "Front wall ended (inside corner):")
+                        self.fix_x(east_px - bump_px, "Front wall ended (inside corner):",
+                                   fresh_dy)
                     else:
                         self.finish("Bumped while looking for the wall end;"
                                     " stopping by odometry")
@@ -712,6 +768,7 @@ class Robot:
                 filtered, derivative, valid_count = None, 0.0, 0
                 gap_travel, orbit_yaw = None, None
                 last_time = self.clock.time()
+                last_travel = self.travel
                 self.set_phase("FOLLOW")
                 continue
 
@@ -736,7 +793,7 @@ class Robot:
                     # along_front: without a guard like it the catch fired at
                     # the front wall's WEST end, rounding onto the wall.
                     elif along_front and east_kind == "corner":
-                        self.fix_x(east_px - px, "Front wall ended (outside corner):")
+                        self.fix_x(east_px - px, "Front wall ended (outside corner):", fresh_dy)
                         return
                 if self.yaw() - orbit_yaw < -ORBIT_MAX_TURN:
                     raise RuntimeError("Obstacle lost")
@@ -752,6 +809,16 @@ class Robot:
                 yaw = self.yaw()
                 if abs(error) < 15 and abs(derivative) < 15:
                     parallel_yaw = yaw  # In band and steady: parallel to the wall.
+                elif (valid_count >= 3 and abs(derivative) > FENCE_RATE
+                        and ground_speed > 30.0):
+                    # The range is steadily changing, so the wall runs at
+                    # asin(rate / speed) from our heading. Without this, a wall
+                    # picked up mid-corner left the fence anchored up to ~30 deg
+                    # off, and the robot drove straight away from it. An echo
+                    # that will not change (oblique) has no rate, so it still
+                    # cannot pull the nose into the wall.
+                    wall = yaw - wall_angle(derivative, ground_speed)
+                    parallel_yaw += 0.2 * (wall - parallel_yaw)
                 # Fence the heading: a range that will not drop (oblique echo)
                 # must not keep steering the nose into the wall.
                 low, high = parallel_yaw - APPROACH_ANGLE, parallel_yaw + APPROACH_ANGLE
@@ -851,7 +918,7 @@ def main():
             robot.follow(wall_y)
             robot.set_phase("RETURN")
             print("RETURN")
-            robot.go_to(START_X, START_Y, RETURN_SPEED)
+            robot.go_home(RETURN_SPEED)
             print("Done at", robot.clock.time(), "ms")
         robot.stop()
         robot.running = False

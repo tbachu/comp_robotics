@@ -1,9 +1,0 @@
-RUN LOG: /private/tmp/claude-501/-Users-jimnguyen-School-Fall-26-COMP581-Lab-Lab3/05db525c-0e5f-424c-9f65-53b6b7472c9c/scratchpad/sim/work/e_no_obstacle_new/runs/run_001
-SETTINGS: MODE RUN FOLLOW_SPEED 150.0 SLOW_SPEED 100.0 ORBIT_SPEED 85.0 ORBIT_RADIUS 215.0 TURN_RATE 75.0 BUMP_TURN 90.0 BUMP_BACKUP 100.0 TARGET_POINT_CLEARANCE 200.0 FRONT_HEADING 35.0 WALL_RUN_MIN 100.0 PAST_TURN 60.0 SEARCH_MARGIN 800.0 MAX_X_FIX 1000.0 RETURN_RESERVE 12000 RUN_LIMIT 117000
-Keep robot still. Checking gyro...
-Gyro moved 0 deg in 2 s
-Ready. Press CENTER. DOWN aborts.
-Gyro drift: 0.0 deg/s over 10980 ms still
-APPROACH
-STOPPED: No front contact within approach limit
-RESULT: stopped at 13830 ms | lap not finished | X fix none | measuring point estimate 2000 1802 | start 2000 500

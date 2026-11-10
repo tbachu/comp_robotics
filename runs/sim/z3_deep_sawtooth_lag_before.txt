@@ -1,0 +1,68 @@
+RUN LOG: work/z3_deep_sawtooth_lag_before/runs/run_001
+SETTINGS: MODE RUN FOLLOW_SPEED 150.0 SLOW_SPEED 100.0 ORBIT_SPEED 85.0 ORBIT_RADIUS 215.0 TURN_RATE 75.0 BUMP_TURN 90.0 BUMP_BACKUP 100.0 TARGET_POINT_CLEARANCE 200.0 FRONT_HEADING 35.0 WALL_RUN_MIN 100.0 PAST_TURN 60.0 SEARCH_MARGIN 800.0 MAX_X_FIX 1000.0 RETURN_RESERVE 12000 RUN_LIMIT 117000
+Keep robot still. Checking gyro...
+Gyro moved 0 deg in 2 s
+Ready. Press CENTER. DOWN aborts.
+Gyro drift: 0.0 deg/s over 10980 ms still
+APPROACH
+Hit point: 2000 1099
+BACK UP
+TURN RIGHT
+FOLLOW: time_ms,followed,sonar,filtered_out,x,y,yaw,encoder_yaw
+10390 0 108.0  2005 898 89 88
+10930 75 108.0  2081 899 90 89
+11470 156 108.0  2162 899 90 90
+12010 236 110.0  2242 897 91 91
+12550 317 132.0  2323 896 91 90
+13090 392 154.0  2398 899 83 83
+13630 447 160.0  2451 910 75 74
+14170 501 163.0  2502 928 66 65
+14710 555 168.0  2551 951 65 64
+15250 608 173.0  2600 973 65 64
+15790 663 179.0  2649 996 64 64
+16330 716 442.0 * 2698 1019 65 64
+16870 766 187.0  2739 1046 46 46
+17410 820 421.0 * 2775 1086 42 41
+17950 868 None  2801 1125 21 20
+18490 914 None  2811 1170 6 5
+19030 960 None  2812 1216 -3 -2
+19570 1005 None  2807 1261 -10 -10
+20110 1051 None  2796 1306 -18 -17
+20650 1097 None  2779 1349 -27 -26
+21190 1148 159.0  2753 1393 -35 -34
+21730 1203 164.0  2719 1435 -43 -43
+22270 1257 167.0  2679 1471 -53 -52
+22810 1310 168.0  2635 1501 -56 -56
+23350 1365 171.0  2590 1532 -56 -56
+23890 1419 174.0  2545 1562 -56 -56
+24430 1473 176.0  2500 1592 -56 -56
+24970 1526 180.0  2456 1622 -57 -56
+25510 1581 536.0 * 2411 1653 -56 -56
+BUMP 1 : backing up and turning right
+30580 1380 None  2596 1575 22 21
+BUMP 2 : backing up and turning right
+BUMP 3 : backing up and turning right
+BUMP 4 : backing up and turning right
+BUMP 5 : backing up and turning right
+49610 654 None  2643 1713 378 377
+50150 708 None  2660 1764 378 377
+BUMP 6 : backing up and turning right
+BUMP 7 : backing up and turning right
+BUMP 8 : backing up and turning right
+BUMP 9 : backing up and turning right
+69300 -11 None  2699 1911 734 733
+69840 42 None  2712 1963 734 733
+BUMP 10 : backing up and turning right
+BUMP 11 : backing up and turning right
+BUMP 12 : backing up and turning right
+BUMP 13 : backing up and turning right
+88990 -671 None  2743 2118 1090 1089
+89530 -617 None  2752 2171 1090 1089
+BUMP 14 : backing up and turning right
+BUMP 15 : backing up and turning right
+BUMP 16 : backing up and turning right
+BUMP 17 : backing up and turning right
+BUMP 18 : backing up and turning right
+BUMP 19 : backing up and turning right
+STOPPED: 117-second run limit
+RESULT: stopped at 117020 ms | lap not finished | X fix none | measuring point estimate 2622 2022 | start 2000 500

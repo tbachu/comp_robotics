@@ -4,9 +4,9 @@ Nov 9, 2026 · Tanish Bachu · Live version with diagram: https://claude.ai/arti
 
 ## Status
 
-The robot completes the lab and returns within 5–15 cm of the start when the front wall has an outside corner just past the hit point. From some start spots it used to keep going past the start and round more corners. `main.py` now fixes that and also uses inside corners as a landmark. It has been checked in a desk simulation but not yet on the robot.
+The robot completes the lab and returns within 5–15 cm of the start when the front wall has an outside corner just past the hit point. From some start spots it used to keep going past the start and round more corners. `main.py` now fixes that and also uses inside corners as a landmark. A second round of fixes (below) puts the whole robot back in its start pose instead of just the measuring point, and keeps it close to the wall on zigzags. All of it has been checked in a desk simulation but not yet on the robot.
 
-- **Code that runs on the robot:** `main.py`. It's the newest version: the lap-end fix (Nov 9 evening) plus run logs saved to files. Not yet tested on the robot (see Known issues). The version before the fix is in git, commit `88203d2`.
+- **Code that runs on the robot:** `main.py`. It's the newest version. It has the lap-end fix and run logs (commit `3ebdbfa`), plus the start-pose return, the wall-following fix for zigzags and the heading fix (Nov 9, late). Not yet tested on the robot (see Known issues). The version before the fix is in git, commit `88203d2`.
 - **Last version tested and known to work:** `main_working_v3.py`.
 - **Hardware:** EV3 running pybricks-micropython (old `ev3brick` API). Motors on B (left) and C (right). Sensors: touch on S1, gyro on S2, ultrasonic on S4, mounted on the left side.
 - **Task:** drive forward to the obstacle, beep, follow it all the way round with the wall on the left and the measuring point within 30 cm, then return to the start at (2.0 m, 0.5 m), all in under 2 minutes.
@@ -17,9 +17,9 @@ All files are in `COMP581_Assignment_3/`. Only `main.py` runs on the robot; the 
 
 | File | What's in it | Tested? |
 | --- | --- | --- |
-| `main.py` | `main_working_v3.py`, plus the 35° front-wall check, the lap-end fix (heading-based final pass, inside-corner landmark) and run logs | Desk simulation only |
+| `main.py` | `main_working_v3.py`, plus the 35° front-wall check, the lap-end fix (heading-based final pass, inside-corner landmark), run logs, the start-pose return and the zigzag wall-following fix | Desk simulation only |
 | `fetch_runs.sh` | Copies the run logs off the brick into `runs/` | — |
-| `runs/sim/` | Simulated runs of the code before and after the lap-end fix; start with `SUMMARY.txt` | — |
+| `runs/sim/` | Simulated runs: commit `3ebdbfa` (what ran on the robot) against the current `main.py`, including zigzag shapes. Start with `SUMMARY.txt` and `paths_after.png` | — |
 | `main_working_v3.py` | 90° bump turn, faster speeds, wider wall-end search, 12 s return reserve | Yes, within 5–15 cm from start points with a clear front-wall corner |
 | `main_working_v2.py` | Same, but turns 60° after a bump | Yes, 10–20 cm |
 | `main_working.py` | First version with the front-wall-end landmark | Yes, 5–10 cm on one run |
@@ -44,7 +44,7 @@ The robot traces the obstacle by sonar, then trusts the front wall's end, not it
    - **No landmark recorded:** return as soon as the estimate reaches the hit point's X.
    - **Landmark recorded:** keep following until the wall end, giving up 80 cm past the expected end.
    - **Past the 105 s mark:** return straight away.
-7. **Return to start.** Turn away from the obstacle and drive to (2.0 m, 0.5 m).
+7. **Return to start.** Put the robot back in the pose it started in: its axle where the axle started, then turn in place to face the obstacle again (log: `Home: ...`). It usually backs in, which needs about 90° of turning in all instead of about 270°. The old return only brought the measuring point (the touch-rod tip) to (2.0 m, 0.5 m). The robot arrives facing roughly the opposite way it started, so its body ended 15–25 cm short, back along the way it came. Depending on which part of the robot you measured, that looked like 5–20 cm.
 
 All of this is in `follow()`. The front-wall heading and Y correction runs whenever the robot follows the front wall steadily on the final pass. A rounded front wall with no clear end still has no landmark, so it returns using the estimate alone.
 
@@ -93,7 +93,8 @@ These are the constants worth changing, with their values in `main.py` and what 
 | `BUMP_TURN` | 90° | Bumps the same corner twice: raise it. Wanders away from the wall after a glancing bump: try 75. |
 | `BUMP_BACKUP` / `BUMP_SPEED` | 100 mm at 150 mm/s | Scrapes the wall while turning after a bump: back up further. |
 | `TARGET_POINT_CLEARANCE` | 200 mm | Measuring point needs more margin under the 30 cm rule: try 160 (expect more bumps). |
-| `RETURN_RESERVE` | 12,000 ms | The return gets cut off by the run limit: raise it. |
+| `RETURN_RESERVE` | 15,000 ms | The return gets cut off by the run limit, or the log says `No time to turn to the start heading`: raise it. |
+| `FENCE_RATE` | 10 mm/s | Still drives straight away from a wall after a corner: lower it to 6–8. Turns its nose into walls: raise it. |
 | `RUN_LIMIT` | 117,000 ms | Leave as is: it leaves 3 s of margin under the 120 s task limit. |
 | `FRONT_HEADING` | 35° | Landmark fires on the wrong wall: lower it. Never prints `Back on the front wall`: raise it. |
 | `WALL_RUN_MIN` | 100 mm | Landmark fires while rounding the front wall's west corner: raise it. |
@@ -109,8 +110,9 @@ The first job is to test `main.py` on the robot from the start spots where it ke
 - [ ] Watch for the landmark firing on the wrong wall. That shows up as `Front wall ended` while the robot is clearly not at the end of the front wall. If it happens, lower `FRONT_HEADING` or raise `WALL_RUN_MIN`.
 - [ ] Rounded front walls still give no usable landmark, so those runs miss by 20–50 cm.
 - [ ] Obstacle shapes whose outline turns more than 60° past a full lap before the front wall (for example an L whose leg sticks out south, west of the hit point) will stop early and return using the estimate.
-- [ ] Lead on the X drift: in the simulation, when the sonar picks a wall back up while still well into a corner, the ±25° heading fence (`APPROACH_ANGLE`) holds the robot at that heading. It then drifts away from the wall and bumps at the next corner: 3 bumps on a plain box. Check the logs for the sonar value climbing steadily after a corner while the yaw stays fixed. If that shows up, it would explain both the bumps and much of the drift.
-- [ ] Check the 30 cm rule at outside corners. Wide arcs (sonar showing `None` for 2–5 s) may take the measuring point past 30 cm.
+- [ ] Zigzag walls (fixed, needs a robot test). After a corner the sonar often picks the next wall up while the robot is still turning. The ±25° heading fence (`APPROACH_ANGLE`) then stayed anchored to that heading until the robot was back in its distance band. So it could not turn parallel, and drove straight away from the wall, out to 300–400 mm. That is how one run skipped a zigzag. Now, when the range is steadily changing, the fence re-aims at the wall's direction, worked out from how fast the range changes (sin θ = rate ÷ speed). In the simulation this took a plain box from 2 bumps to 0, kept the measuring point within about 27 cm on most shapes (was 35–42 cm), and made laps 10–20 s shorter. A stuck oblique echo, which the fence exists to block, has no rate, so it is still blocked. Check the 30 cm rule on the real zigzag.
+- [ ] Very deep, sharp zigzags (teeth over about 20 cm deep) still take the measuring point past 30 cm for some seconds. If the front wall runs straight into one, there is no clean wall end to use as a landmark either.
+- [ ] Landmark accuracy depends on reaching the wall's end the same way on both passes. If the robot is still closing in (about 20 cm out and angled in) when the sonar loses the corner, the X fix can be 5–12 cm off. Correcting this needs the real sonar's beam width.
 - [ ] Time is tight on laps with 5–6 bumps. Each bump costs about 4 s, about 1 s of it the ouch pause.
 - [ ] The Points section of the assignment hasn't been read yet. It decides whether accuracy at the start or staying under 2 minutes matters more.
 
@@ -143,7 +145,7 @@ While following, the log prints a row every 500 ms: `time_ms, followed, sonar, f
 
 Every run in `RUN`, `STRAIGHT` or `TURN` mode saves two files in `runs/` next to `main.py` on the brick, numbered `run_001`, `run_002` and so on:
 
-- `run_NNN.txt`: everything the console shows. It starts with the settings used and ends with a `RESULT` line: done or stopped, time, how the lap ended, the X fix, and the estimated end point.
+- `run_NNN.txt`: everything the console shows. It starts with the settings used and ends with a `RESULT` line: done or stopped, time, how the lap ended, the X fix, and the estimated end pose (measuring point, axle and heading), next to the start pose. When the landmark fires, the line after it may say `Y off by N mm`: Y was fixed from the last echo off the front wall.
 - `run_NNN.csv`: one row per control step (about 20 a second), for plotting the path. Columns: `t_ms,phase,x,y,yaw,encoder_yaw,px,py,sonar`. `x, y` is the axle estimate and `px, py` the measuring point estimate, in mm. `phase` is APPROACH, BACKUP, TURN, FOLLOW, BUMP or RETURN.
 
 To copy them to the laptop, run `./fetch_runs.sh` from this folder with the brick connected (password `maker`). They land in `runs/` here. `.vscode/settings.json` keeps `runs/` from being downloaded back to the brick.

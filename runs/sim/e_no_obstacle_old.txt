@@ -1,6 +1,0 @@
-Keep robot still. Checking gyro...
-Gyro moved 0 deg in 2 s
-Ready. Press CENTER. DOWN aborts.
-Gyro drift: 0.0 deg/s over 10980 ms still
-APPROACH
-STOPPED: No front contact within approach limit

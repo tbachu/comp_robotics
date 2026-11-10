@@ -1,52 +1,37 @@
-Desk simulation of main.py (old = main.py before the lap-end fix, new = current main.py).
-2D kinematic model: sonar beam +/-10 deg, echoes lost past 25 deg incidence; encoder slip on the
-obstacle's back face injected to make odometry X lag (or lead), like the 300-780 mm seen on the robot.
-Start = measuring point at (2000, 500). 'miss' = true distance from the start when the run ended.
-"sim" counts the ~14 s spent waiting for CENTER; the task time is the RESULT line's ms.
-Per run: <scenario>_<old|new>.txt (console), _new.csv (run log, same as on the brick), _truth.csv (true path).
+Desk simulation: before = main.py as committed in 3ebdbfa (what ran on the robot), after = current main.py.
+2D model: sonar beam +/-10 deg, echoes lost past 25 deg incidence; encoder slip on the back face makes X lag or lead.
+body = true distance of the robot's axle from where it started (what you see looking at the robot).
+tip  = true distance of the measuring point (touch-rod tip) from (2000, 500).
+max wall = worst true measuring-point distance from the obstacle while following; >30cm = seconds past the 30 cm rule.
+Files: <scenario>_<before|after>.txt (console), .csv (run log as saved on the brick), _truth.csv (true path);
+paths_before.png / paths_after.png = true paths on the plain box and the three zigzag shapes.
 
-Scenarios: a short front wall, hit 200 mm from its outside corner, X lags | b front wall ends in an inside
-corner 300 mm east, X lags | c X runs ahead, hit 100 mm from the wall's west end | d baseline, no slip |
-e no obstacle (checks a STOPPED run still logs) | f long wall, X lags | g 250 mm front wall, X lags |
-h inside corner 150 mm east, X ahead
+Scenarios: a short front wall, X lags | b inside corner 300 mm east, X lags | c X ahead, hit near west end |
+d plain box | f long wall, X lags | g 250 mm front wall | h inside corner 150 mm east, X ahead |
+z1 sawtooth east face (150 mm teeth) | z2 staircase back face (150 mm steps) | z3 deep sawtooth (250 mm teeth), X lags
 
-== a_short_wall_lag / old: miss 801 mm, sim 131.0 s
-    STOPPED: 117-second run limit
-== a_short_wall_lag / new: miss 22 mm, sim 88.2 s
-    Front wall ended (outside corner): X off by 517 mm
-    RESULT: done at 74240 ms | Front wall ended (outside corner): X off by 517 mm | X fix 517 | measuring point estimate 2005 495 | start 2000 500
-== b_inside_corner_lag / old: miss 1588 mm, sim 131.0 s
-    STOPPED: 117-second run limit
-== b_inside_corner_lag / new: miss 25 mm, sim 113.9 s
-    Front wall ended (inside corner): X off by 881 mm
-    RESULT: done at 99870 ms | Front wall ended (inside corner): X off by 881 mm | X fix 881 | measuring point estimate 2004 497 | start 2000 500
-== c_ahead_west_end / old: miss 807 mm, sim 131.1 s
-    STOPPED: 117-second run limit
-== c_ahead_west_end / new: miss 31 mm, sim 87.2 s
-    Front wall ended (outside corner): X off by -339 mm
-    RESULT: done at 73160 ms | Front wall ended (outside corner): X off by -339 mm | X fix -339 | measuring point estimate 2001 494 | start 2000 500
-== d_baseline / old: miss 10 mm, sim 90.5 s
-    Front wall ended: passed hit point, X off by 2 mm
-== d_baseline / new: miss 10 mm, sim 90.5 s
-    Front wall ended (outside corner): X off by 2 mm
-    RESULT: done at 76520 ms | Front wall ended (outside corner): X off by 2 mm | X fix 2 | measuring point estimate 2003 495 | start 2000 500
-== e_no_obstacle / old: miss 1302 mm, sim 27.8 s
-    STOPPED: No front contact within approach limit
-== e_no_obstacle / new: miss 1302 mm, sim 27.8 s
-    STOPPED: No front contact within approach limit
-    RESULT: stopped at 13830 ms | lap not finished | X fix none | measuring point estimate 2000 1802 | start 2000 500
-== f_long_wall_lag / old: miss 33 mm, sim 95.7 s
-    Front wall ended: passed hit point, X off by 603 mm
-== f_long_wall_lag / new: miss 33 mm, sim 95.7 s
-    Front wall ended (outside corner): X off by 603 mm
-    RESULT: done at 81740 ms | Front wall ended (outside corner): X off by 603 mm | X fix 603 | measuring point estimate 2003 496 | start 2000 500
-== g_tiny_wall_lag / old: miss 812 mm, sim 131.1 s
-    STOPPED: 117-second run limit
-== g_tiny_wall_lag / new: miss 56 mm, sim 74.6 s
-    Front wall ended (outside corner): X off by 478 mm
-    RESULT: done at 60580 ms | Front wall ended (outside corner): X off by 478 mm | X fix 478 | measuring point estimate 2005 497 | start 2000 500
-== h_near_inside_corner_ahead / old: miss 336 mm, sim 86.1 s
-    Back at hit point: 2000 818 followed 4785 mm
-== h_near_inside_corner_ahead / new: miss 44 mm, sim 92.0 s
-    Front wall ended (inside corner): X off by -344 mm
-    RESULT: done at 78000 ms | Front wall ended (inside corner): X off by -344 mm | X fix -344 | measuring point estimate 2005 500 | start 2000 500
+== before
+scenario                     body   tip max wall  >30cm bumps task s  how the lap ended
+a_short_wall_lag              179    22      377    6.2     2   74.2  Front wall ended (outside corner): X off by 517 mm
+b_inside_corner_lag           220    25      409   15.4     4   99.9  Front wall ended (inside corner): X off by 881 mm
+c_ahead_west_end              146    31      366   12.2     2   73.2  Front wall ended (outside corner): X off by -339 mm
+d_baseline                    194    10      395   12.2     2   76.5  Front wall ended (outside corner): X off by 2 mm
+f_long_wall_lag               204    33      353    5.9     2   81.7  Front wall ended (outside corner): X off by 603 mm
+g_tiny_wall_lag               153    56      368    4.8     1   60.6  Front wall ended (outside corner): X off by 478 mm
+h_near_inside_corner_ahead    251    44      425    9.9     3   78.0  Front wall ended (inside corner): X off by -344 mm
+z1_sawtooth_east              180    12      396   18.4     4  104.7  Front wall ended (outside corner): X off by 15 mm
+z2_staircase_back             182     9      373    8.2     2   82.8  Front wall ended (outside corner): X off by 12 mm
+z3_deep_sawtooth_lag         1208  1146      307    0.7    19  117.0  STOPPED: 117-second run limit
+
+== after
+scenario                     body   tip max wall  >30cm bumps task s  how the lap ended
+a_short_wall_lag               22    25      267    0.0     0   58.1  Front wall ended (outside corner): X off by 529 mm
+b_inside_corner_lag             4     2      268    0.0     2   79.4  Front wall ended (inside corner): X off by 876 mm
+c_ahead_west_end               37    35      323    1.9     1   64.8  Front wall ended (outside corner): X off by -284 mm
+d_baseline                     18    16      268    0.0     0   60.5  Front wall ended (outside corner): X off by 16 mm
+f_long_wall_lag                18    16      268    0.0     0   63.1  Front wall ended (outside corner): X off by 595 mm
+g_tiny_wall_lag                52    55      269    0.0     0   52.1  Front wall ended (outside corner): X off by 349 mm
+h_near_inside_corner_ahead      1     3      313    2.2     3   76.4  Front wall ended (inside corner): X off by -373 mm
+z1_sawtooth_east               14    12      271    0.0     2   84.8  Front wall ended (outside corner): X off by 19 mm
+z2_staircase_back              13    16      306    0.1     1   83.0  Front wall ended (outside corner): X off by -220 mm
+z3_deep_sawtooth_lag          359   357      363   10.8     4  112.3  Out of time; stopping by odometry
