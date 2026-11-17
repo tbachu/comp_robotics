@@ -1,0 +1,18 @@
+layout         goal_mm time_s  beep  hit left out_mm est_mm scrape  how
+open                20   18.8   yes    0    0      0     23    0.0  RESULT: Reached the goal point | time 18903 ms | measuring point 2494 2504 | 6 mm from the
+figure              27   33.7   yes    1    1      0     27    0.7  RESULT: Reached the goal point | time 33766 ms | measuring point 2495 2502 | 5 mm from the
+wall                 8   37.8   yes    1    1      0     14    0.0  RESULT: Reached the goal point | time 37904 ms | measuring point 2493 2500 | 6 mm from the
+wall_right          13   31.0   yes    1    1      0     19    0.0  RESULT: Reached the goal point | time 31105 ms | measuring point 2493 2503 | 7 mm from the
+wall_left           22   45.4   yes    1    1      0     18    0.0  RESULT: Reached the goal point | time 45533 ms | measuring point 2493 2499 | 6 mm from the
+u                   15   66.6   yes    5    1      0     17    0.1  RESULT: Reached the goal point | time 66718 ms | measuring point 2493 2500 | 6 mm from the
+circle              13   29.3   yes    1    1      0     16    0.0  RESULT: Reached the goal point | time 29379 ms | measuring point 2494 2503 | 5 mm from the
+two_boxes           19   40.5   yes    2    2      0     21    0.6  RESULT: Reached the goal point | time 40637 ms | measuring point 2493 2502 | 7 mm from the
+goal_wall_near      85   35.0   yes    1    0      0     17    0.0  RESULT: Stopped beside the obstacle next to the goal | time 35139 ms | measuring point 252
+goal_wall_far       13   33.7   yes    1    1      0     18    0.0  RESULT: Reached the goal point | time 33846 ms | measuring point 2494 2496 | 6 mm from the
+goal_box_behind      20   18.8   yes    0    0      0     23    0.0  RESULT: Reached the goal point | time 18903 ms | measuring point 2494 2504 | 6 mm from the
+east_wall           22   51.4   yes    1    1      0     21    0.0  RESULT: Reached the goal point | time 51533 ms | measuring point 2496 2495 | 6 mm from the
+zigzag              20   41.2   yes    2    1      0     19    0.6  RESULT: Reached the goal point | time 41326 ms | measuring point 2494 2500 | 5 mm from the
+l_pocket           454   41.9   yes    1    1      0    454    3.2  RESULT: Reached the goal point | time 42059 ms | measuring point 2494 2501 | 5 mm from the
+slant               57   37.3   yes    1    1      0     54    0.4  RESULT: Reached the goal point | time 37402 ms | measuring point 2493 2502 | 7 mm from the
+
+14/15 stopped in the goal region; median error 20 mm; median time 37.3 s; worst time 66.6 s; workspace exits 0
